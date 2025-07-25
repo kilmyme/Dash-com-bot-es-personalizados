@@ -1,0 +1,249 @@
+-- ⛩️ SCRIPT DE DASH COM BOTÕES DE AJUSTE DE DASHPOWER E COOLDOWN ⛩️
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+local DashPower = 110
+local JumpPower = 70
+local DashCooldown = 3
+local CanDash = true
+local DashEnabled = false
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "DashGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = PlayerGui
+
+local function createStyledButton(text, pos, bgColor, gradientColors)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(0, 60, 0, 22)
+	btn.Position = pos
+	btn.BackgroundColor3 = bgColor or Color3.fromRGB(255, 0, 0)
+	btn.Text = text
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.TextStrokeTransparency = 0.3
+	btn.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+	btn.TextScaled = true
+	btn.Font = Enum.Font.GothamBold
+	btn.AutoButtonColor = false
+	btn.Parent = ScreenGui
+	Instance.new("UICorner", btn)
+	local gradient = Instance.new("UIGradient", btn)
+	gradient.Color = ColorSequence.new(gradientColors)
+	return btn
+end
+
+-- BOTÕES DASH POWER
+local BtnMais = createStyledButton("+", UDim2.new(0, 10, 1, -87), Color3.fromRGB(0, 200, 0), {
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(0,255,0)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(0,150,0))
+})
+
+local BtnMenos = createStyledButton("-", UDim2.new(0, 10, 1, -61), Color3.fromRGB(255, 140, 0), {
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(255,160,60)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(200,100,0))
+})
+
+-- NOVOS BOTÕES DE COOLDOWN
+local BtnCoolPlus = createStyledButton("+CD", UDim2.new(0, 80, 1, -87), Color3.fromRGB(0, 150, 255), {
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 200, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 120, 200))
+})
+
+local BtnCoolMinus = createStyledButton("-CD", UDim2.new(0, 80, 1, -61), Color3.fromRGB(0, 100, 255), {
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 180, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 100, 180))
+})
+
+local Btn = createStyledButton("Dash", UDim2.new(0, 10, 1, -35), Color3.fromRGB(255, 0, 0), {
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(255,60,60)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(180,0,0))
+})
+
+-- Inicialmente escondidos
+BtnMais.Visible = false
+BtnMenos.Visible = false
+BtnCoolPlus.Visible = false
+BtnCoolMinus.Visible = false
+
+-- Sombra botão Dash
+local shadow = Instance.new("Frame")
+shadow.Size = UDim2.new(1, 8, 1, 8)
+shadow.Position = UDim2.new(0, -4, 0, -4)
+shadow.BackgroundColor3 = Color3.fromRGB(130, 0, 0)
+shadow.BackgroundTransparency = 0.7
+shadow.ZIndex = Btn.ZIndex - 1
+shadow.Parent = Btn
+
+-- Barra de cooldown
+local Bar = Instance.new("Frame")
+Bar.Size = UDim2.new(0, 100, 0, 12)
+Bar.Position = UDim2.new(0.5, -50, 1, -20)
+Bar.BackgroundColor3 = Color3.fromRGB(30, 10, 10)
+Bar.BorderSizePixel = 0
+Bar.Parent = ScreenGui
+Instance.new("UICorner", Bar)
+
+local Fill = Instance.new("Frame")
+Fill.Size = UDim2.new(0, 0, 1, 0)
+Fill.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+Fill.BorderSizePixel = 0
+Fill.Parent = Bar
+Instance.new("UICorner", Fill)
+local gradientFill = Instance.new("UIGradient", Fill)
+gradientFill.Color = ColorSequence.new{
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 80)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 0, 0))
+}
+
+local shadowFrame = Instance.new("Frame")
+shadowFrame.Size = UDim2.new(1, 4, 1, 4)
+shadowFrame.Position = UDim2.new(0, -2, 0, -2)
+shadowFrame.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+shadowFrame.BackgroundTransparency = 0.7
+shadowFrame.ZIndex = Bar.ZIndex - 1
+shadowFrame.Parent = Bar
+
+local Text = Instance.new("TextLabel")
+Text.Size = UDim2.new(1, 0, 1, 0)
+Text.BackgroundTransparency = 1
+Text.TextColor3 = Color3.new(1, 1, 1)
+Text.TextScaled = true
+Text.Font = Enum.Font.Gotham
+Text.Text = "Dash Desativado"
+Text.Parent = Bar
+
+-- Funções
+local spinAnimId = "rbxassetid://18537367238"
+local currentSpinTrack
+
+local function updateBar(t, total)
+	local ratio = math.clamp(t / total, 0, 1)
+	Fill.Size = UDim2.new(ratio, 0, 1, 0)
+	if ratio == 1 then
+		Text.Text = "Dash Ready"
+	else
+		Text.Text = string.format("Cooldown: %.1fs", t)
+	end
+end
+
+local function efeito(HRP)
+	local a0 = Instance.new("Attachment", HRP)
+	local a1 = Instance.new("Attachment", HRP)
+	a0.Position = Vector3.new(0, 1, 0)
+	a1.Position = Vector3.new(0, -1, 0)
+	local trail = Instance.new("Trail")
+	trail.Attachment0 = a0
+	trail.Attachment1 = a1
+	trail.Lifetime = 0.1
+	trail.Color = ColorSequence.new(Color3.fromRGB(255, 0, 0))
+	trail.Transparency = NumberSequence.new(0.2, 1)
+	trail.LightEmission = 1
+	trail.Parent = HRP
+end
+
+local function playSpinAnimation(Humanoid)
+	if currentSpinTrack then return end
+	local anim = Instance.new("Animation")
+	anim.AnimationId = spinAnimId
+	currentSpinTrack = Humanoid:LoadAnimation(anim)
+	currentSpinTrack.Priority = Enum.AnimationPriority.Action
+	currentSpinTrack:Play()
+end
+
+local function stopSpinAnimation()
+	if currentSpinTrack then
+		currentSpinTrack:Stop()
+		currentSpinTrack:Destroy()
+		currentSpinTrack = nil
+	end
+end
+
+local function doDash(Humanoid, HRP)
+	if not CanDash or not DashEnabled then return end
+	CanDash = false
+	local dir = Humanoid.MoveDirection
+	if dir.Magnitude < 0.1 then
+		CanDash = true
+		return
+	end
+	efeito(HRP)
+	local direction = Vector3.new(dir.X, 0, dir.Z).Unit
+	local baseCFrame = HRP.CFrame
+	HRP.Velocity = Vector3.new(direction.X * DashPower, math.max(HRP.Velocity.Y, JumpPower), direction.Z * DashPower)
+	Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+	playSpinAnimation(Humanoid)
+	local dur = 0.6
+	local start = tick()
+	local con
+	con = RunService.RenderStepped:Connect(function()
+		local t = tick() - start
+		if t < dur then
+			local angle = 360 * (t / dur)
+			HRP.CFrame = CFrame.new(HRP.Position) * (baseCFrame.Rotation * CFrame.Angles(math.rad(angle), 0, 0))
+		else
+			con:Disconnect()
+			HRP.CFrame = CFrame.new(HRP.Position, HRP.Position + direction)
+			Humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+			stopSpinAnimation()
+		end
+	end)
+
+	updateBar(DashCooldown, DashCooldown)
+	task.spawn(function()
+		local cstart = tick()
+		while tick() - cstart < DashCooldown do
+			updateBar(DashCooldown - (tick() - cstart), DashCooldown)
+			task.wait(0.1)
+		end
+		updateBar(1, 1)
+		CanDash = true
+	end)
+end
+
+-- Conexões dos botões
+Btn.MouseButton1Click:Connect(function()
+	DashEnabled = not DashEnabled
+	Btn.Text = DashEnabled and "Desativar" or "Dash"
+	Text.Text = DashEnabled and "Dash Ready" or "Dash Desativado"
+	BtnMais.Visible = DashEnabled
+	BtnMenos.Visible = DashEnabled
+	BtnCoolPlus.Visible = DashEnabled
+	BtnCoolMinus.Visible = DashEnabled
+end)
+
+BtnMais.MouseButton1Click:Connect(function()
+	DashPower += 10
+	Text.Text = "DashPower: "..DashPower
+end)
+
+BtnMenos.MouseButton1Click:Connect(function()
+	DashPower = math.max(10, DashPower - 10)
+	Text.Text = "DashPower: "..DashPower
+end)
+
+BtnCoolPlus.MouseButton1Click:Connect(function()
+	DashCooldown = math.clamp(DashCooldown + 0.5, 0.5, 10)
+	Text.Text = "DashCooldown: "..DashCooldown.."s"
+end)
+
+BtnCoolMinus.MouseButton1Click:Connect(function()
+	DashCooldown = math.clamp(DashCooldown - 0.5, 0.5, 10)
+	Text.Text = "DashCooldown: "..DashCooldown.."s"
+end)
+
+-- Setup inicial
+local function setup(char)
+	local Humanoid = char:WaitForChild("Humanoid")
+	local HRP = char:WaitForChild("HumanoidRootPart")
+	stopSpinAnimation()
+	Humanoid.Jumping:Connect(function(state)
+		if state then doDash(Humanoid, HRP) end
+	end)
+end
+
+if Player.Character then setup(Player.Character) end
+Player.CharacterAdded:Connect(setup)
+updateBar(0, 1)
